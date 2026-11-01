@@ -3,7 +3,8 @@ name: build
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+  release:
+    types: [published]  # publishing a release on GitHub builds and attaches the app files
   pull_request:
   workflow_dispatch:
 

@@ -36,7 +36,7 @@ python3 app.py
 
 ## Build
 
-Pushing to `main` makes GitHub test and build both apps (see the Actions tab for downloads). Pushing a tag like `v1.0.1` also publishes them as a Release. To build locally: `pip install pyinstaller pillow && pyinstaller --noconfirm sortdrop.spec`.
+Pushing to `main` makes GitHub test and build both apps (see the Actions tab for downloads). Publishing a Release on GitHub (e.g. tag `v1.0.1`) builds both apps again and attaches them to it. To build locally: `pip install pyinstaller pillow && pyinstaller --noconfirm sortdrop.spec`.
 
 | File | What it is |
 |---|---|
