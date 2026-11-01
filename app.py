@@ -29,6 +29,13 @@ def pretty(path):
     return "~" + path[len(home):] if path.startswith(home) else path
 
 
+def front(window):
+    """A menu-bar-only app isn't brought forward by macOS, so take focus explicitly."""
+    window.show()
+    window.raise_()
+    window.activateWindow()
+
+
 def button(text, fn):
     b = QPushButton(text)
     b.clicked.connect(fn)
@@ -291,7 +298,7 @@ class App(QObject):
         box.setIconPixmap(QPixmap(str(ASSETS / "icon.png")).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         box.setWindowFlag(Qt.WindowStaysOnTopHint)
         others = box.addButton("Move to Others", QMessageBox.AcceptRole)
-        choose = box.addButton("Choose folder…", QMessageBox.ActionRole)
+        choose = box.addButton("Choose folder…", QMessageBox.YesRole)  # YesRole always closes the box
         box.addButton(LEAVE, QMessageBox.RejectRole)
         box.setDefaultButton(others)
         always = QCheckBox(f"Always do this for {ext} files")
@@ -300,6 +307,7 @@ class App(QObject):
             box.setCheckBox(always)
         self.asking = True
         try:
+            front(box)
             box.exec()
             clicked = box.clickedButton()
             if clicked is others:
@@ -348,6 +356,7 @@ class App(QObject):
         dlg = Settings(self.cfg, first_run)
         self.asking = True  # hold new files until Settings closes, so a pop-up rule isn't overwritten by Save
         try:
+            front(dlg)
             saved = dlg.exec()
         finally:
             self.asking = False
