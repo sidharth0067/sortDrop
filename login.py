@@ -43,7 +43,7 @@ def set_enabled(on, path=None):
             PLIST.unlink(missing_ok=True)
     elif sys.platform == "win32":
         import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:  # creates it if missing
             if on:
                 winreg.SetValueEx(key, "SortDrop", 0, winreg.REG_SZ, f'"{path}"')
             else:

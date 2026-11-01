@@ -106,4 +106,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BaseException:
+        import traceback
+        traceback.print_exc()
+        os._exit(1)  # watcher threads would otherwise keep a failed test running forever
