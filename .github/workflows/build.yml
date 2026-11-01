@@ -1,0 +1,66 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # attach the app files to the Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]  # macos-14 = Apple Silicon
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt "pyinstaller>=6.10" pillow
+
+      - name: Test sorting engine
+        run: python test_sorter.py
+      - name: Test the app end to end (off-screen)
+        run: python test_app.py
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - run: pyinstaller --noconfirm sortdrop.spec
+
+      - name: Package and smoke-test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --deep --sign - dist/SortDrop.app
+          QT_QPA_PLATFORM=offscreen dist/SortDrop.app/Contents/MacOS/SortDrop &
+          sleep 10
+          kill -0 $! || { echo "packaged app crashed on start"; exit 1; }
+          kill $!
+          mkdir dmg && cp -R dist/SortDrop.app dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname SortDrop -srcfolder dmg -ov -format UDZO SortDrop-mac.dmg
+
+      - name: Package and smoke-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $p = Start-Process dist/SortDrop.exe -PassThru
+          Start-Sleep 15
+          if ($p.HasExited) { throw "packaged app crashed on start (exit $($p.ExitCode))" }
+          Stop-Process $p
+          Move-Item dist/SortDrop.exe SortDrop-windows.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SortDrop-${{ runner.os }}
+          path: SortDrop-*.*
+
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SortDrop-*.*
