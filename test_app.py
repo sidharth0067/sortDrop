@@ -9,12 +9,28 @@ HOME = Path(tempfile.mkdtemp()).resolve()
 os.environ["HOME"] = os.environ["USERPROFILE"] = str(HOME)  # keep the test away from the real Downloads
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QTimer  # noqa: E402
+from PySide6.QtCore import Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 import app  # noqa: E402
 import login  # noqa: E402
 import sorter  # noqa: E402
+import theme  # noqa: E402
+
+SHOTS = os.environ.get("SCREENSHOTS")  # folder: save pictures of the real windows (CI publishes them)
+
+
+def shot(widget, name):
+    if SHOTS:
+        Path(SHOTS).mkdir(exist_ok=True)
+        widget.grab().save(str(Path(SHOTS) / f"{name}.png"))
+
+
+def set_dark(qapp, dark):
+    # setColorScheme exists from Qt 6.8; older Qt just stays in the system mode
+    if hasattr(qapp.styleHints(), "setColorScheme"):
+        qapp.styleHints().setColorScheme(Qt.ColorScheme.Dark if dark else Qt.ColorScheme.Light)
+        qapp.processEvents()
 
 
 def wait_for(check, what, qapp, timeout=20):
@@ -33,6 +49,7 @@ def answer_popup(choice):
         box = QApplication.activeModalWidget()
         if not isinstance(box, QMessageBox):
             return QTimer.singleShot(50, click)
+        shot(box, "popup")
         next(b for b in box.buttons() if b.text() == choice).click()
     QTimer.singleShot(50, click)
 
@@ -45,15 +62,35 @@ def main():
     cfg["setup_done"] = True
     sorter.save_config(cfg)
 
-    # Settings window builds without errors, first-run and normal.
-    for first in (True, False):
-        s = app.Settings(cfg, first)
+    a = app.App(qapp)  # also sets up the theme, style and Lora font
+    assert a.watch == downloads
+
+    # Every GoalWall palette, light and dark, makes a full stylesheet.
+    for name in theme.PALETTES:
+        for dark in (False, True):
+            t = theme.tokens(name, dark)
+            assert len(t) == len(theme.KEYS) and t["accent"] in theme.stylesheet(t)
+
+    # Settings builds, first-run and normal; picking a colour previews it live, Cancel puts the saved one back.
+    shown = dict(cfg, rules=[sorter.make_rule("name", "invoice", str(HOME / "Documents" / "Finance")),
+                             sorter.make_rule("ext", "epub", sorter.others_dir(cfg))])
+    for pal, dark in (("route", False), ("route", True), ("matcha", False), ("dracula", True)):
+        set_dark(qapp, dark)
+        s = app.Settings(dict(shown, palette=pal), True)
+        theme.apply(qapp, pal)
+        s.resize(820, 1320)  # tall enough that the picture shows every card
         s.show()
         qapp.processEvents()
+        shot(s, f"settings-{pal}-{'dark' if dark else 'light'}")
         s.close()
-
-    a = app.App(qapp)
-    assert a.watch == downloads
+    set_dark(qapp, False)
+    theme.apply(qapp, "route")
+    s = app.Settings(cfg, False)
+    s.pick_palette("dracula")
+    assert theme.current["accent"] == theme.tokens("dracula", False)["accent"] and s.cfg["palette"] == "dracula"
+    s.reject()
+    assert theme.current["accent"] == theme.tokens("route", False)["accent"], "Cancel kept the previewed colours"
+    assert a.cfg.get("palette", "route") == "route"
 
     # Known type: moved automatically, no question.
     (downloads / "report.pdf").write_text("pdf")

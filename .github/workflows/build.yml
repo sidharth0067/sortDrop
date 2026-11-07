@@ -32,6 +32,16 @@ jobs:
         run: python test_app.py
         env:
           QT_QPA_PLATFORM: offscreen
+          SCREENSHOTS: shots
+
+      - name: Publish window screenshots to the "screenshots" branch
+        if: runner.os == 'macOS' && github.event_name == 'push'
+        run: |
+          cd shots
+          git init -q -b screenshots
+          git add .
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Window screenshots for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" screenshots
 
       - run: pyinstaller --noconfirm sortdrop.spec
 

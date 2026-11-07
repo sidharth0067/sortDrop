@@ -21,6 +21,7 @@ Download the latest version from the [Releases page](../../releases/latest). Pyt
 - **New downloads** move automatically once they've fully finished. Half-done `.crdownload` / `.part` / `.download` files are never touched.
 - **Unknown types** (e.g. `.epub`): SortDrop asks **Move to Others** (`Downloads/Others`), **Choose folder…** (the picker has a New Folder button), or **Keep in Downloads**. "Always do this" saves your answer, so you're only asked once per type.
 - **Your rules:** "Extension is .pdf" or "Name contains invoice", each with its own folder. Name rules beat extension rules, and both beat the default types.
+- **Colours:** the 10 palettes from GoalWall (Route card, Neon, Aubergine, Mocha, Catppuccin, Nord, Tokyo Night, Dracula, Matcha, Swiss), picked in Settings. Light and dark follow your system.
 - **Menu:** Pause sorting, Sort existing files now, Undo (shows the last move), Open watched folder, Settings, Quit.
 - **Never overwrites:** if `report.pdf` already exists, the new one becomes `report (1).pdf`.
 - Settings are saved in `~/.sortdrop/config.json`, and every move is logged to `~/.sortdrop/moves.log`.
@@ -42,5 +43,6 @@ Pushing to `main` makes GitHub test and build both apps (see the Actions tab for
 |---|---|
 | `sorter.py` | Sorting rules, moving files, config. No UI. |
 | `app.py` | Menu-bar app, file watcher, Settings window, pop-ups. |
+| `theme.py` | GoalWall's colour palettes and the window styles. |
 | `login.py` | "Open at login" for macOS and Windows. |
 | `sortdrop.spec` | Packaging recipe (PyInstaller). |

@@ -32,6 +32,7 @@ def default_config():
         "categories": {c: str(watch / c) for c in CATEGORIES},  # "" = leave in Downloads
         "rules": [],  # {"type": "ext"|"name", "value": ..., "dest": folder or ""}
         "setup_done": False,
+        "palette": "route",  # one of theme.PALETTES (GoalWall's colours)
     }
 
 

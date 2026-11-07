@@ -1,7 +1,7 @@
 # Build the standalone app (bundles its own Python): pyinstaller --noconfirm sortdrop.spec
 import sys
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 a = Analysis(["app.py"], datas=[("assets", "assets")])
 pyz = PYZ(a.pure)

@@ -5,18 +5,19 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QLockFile, QObject, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtCore import QLockFile, QObject, QRectF, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QGridLayout,
-    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QSystemTrayIcon,
-    QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QApplication, QButtonGroup, QCheckBox, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QLineEdit, QMenu, QMessageBox, QPushButton, QScrollArea, QSystemTrayIcon, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QWidget,
 )
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 import login
 import sorter
+import theme
 
 LEAVE = "Keep in Downloads"
 ASSETS = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "assets"
@@ -36,10 +37,69 @@ def front(window):
     window.activateWindow()
 
 
-def button(text, fn):
+def button(text, fn, **props):
     b = QPushButton(text)
     b.clicked.connect(fn)
+    for k, v in props.items():  # primary=True / chip=True pick the GoalWall button styles in theme.py
+        b.setProperty(k, v)
     return b
+
+
+def label(text, name="", muted=False):
+    lab = QLabel(text)
+    lab.setObjectName(name)  # "title" / "section" pick the Lora serif in theme.py
+    lab.setProperty("muted", muted)
+    return lab
+
+
+def card(title):
+    """GoalWall's panel: a rounded surface with a serif section title."""
+    frame = QFrame()
+    frame.setObjectName("card")
+    lay = QVBoxLayout(frame)
+    lay.setContentsMargins(20, 16, 20, 18)
+    lay.setSpacing(10)
+    lay.addWidget(label(title, name="section"))
+    return frame, lay
+
+
+def swatches(colors):
+    """The three overlapping dots on GoalWall's palette chips."""
+    pm = QPixmap(64, 24)
+    pm.setDevicePixelRatio(2)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    for i, c in enumerate(colors):
+        p.setPen(QColor(0, 0, 0, 40))
+        p.setBrush(QColor(c))
+        p.drawEllipse(QRectF(1 + i * 8, 0.5, 11, 11))
+    p.end()
+    return QIcon(pm)
+
+
+class Switch(QCheckBox):
+    """GoalWall's macOS-style sliding toggle."""
+
+    def sizeHint(self):
+        return QSize(48 + self.fontMetrics().horizontalAdvance(self.text()), 28)
+
+    def hitButton(self, pos):  # the whole row is clickable, like a label
+        return self.rect().contains(pos)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        if not self.isEnabled():
+            p.setOpacity(.45)
+        track = QRectF(0, (self.height() - 22) / 2, 38, 22)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(theme.current.get("accent", "#2D5BD0")) if self.isChecked() else QColor(118, 118, 128, 61))
+        p.drawRoundedRect(track, 11, 11)
+        p.setBrush(QColor("white"))
+        p.drawEllipse(QRectF(track.x() + (18 if self.isChecked() else 2), track.y() + 2, 18, 18))
+        p.setPen(QColor(theme.current.get("ink", "#16232B")))
+        p.drawText(QRectF(48, 0, self.width() - 48, self.height()), Qt.AlignVCenter | Qt.AlignLeft, self.text())
 
 
 class Settings(QDialog):
@@ -49,83 +109,145 @@ class Settings(QDialog):
         self.setWindowIcon(QIcon(str(ASSETS / "icon.png")))
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.cfg = copy.deepcopy(cfg)
-        lay = QVBoxLayout(self)
+        self.saved_palette = cfg.get("palette", "route")
+
+        body = QWidget()
+        body.setObjectName("body")
+        lay = QVBoxLayout(body)
+        lay.setContentsMargins(24, 22, 24, 12)
         lay.setSpacing(14)
 
         head = QHBoxLayout()
+        head.setSpacing(14)
         logo = QLabel()
         logo.setPixmap(QPixmap(str(ASSETS / "icon.png")).scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         head.addWidget(logo)
-        intro = QLabel(
-            "<span style='font-size:20px; font-weight:600'>"
-            + ("Welcome to SortDrop" if first_run else "SortDrop") + "</span><br>"
-            "New downloads move to their folder as soon as they finish. "
-            + ("Choose where each type should go, then click Save to start." if first_run else ""))
-        intro.setWordWrap(True)
-        head.addWidget(intro, 1)
+        words = QVBoxLayout()
+        words.setSpacing(2)
+        words.addWidget(label("Welcome to SortDrop" if first_run else "SortDrop", name="title"))
+        sub = label("New downloads move to their folder as soon as they finish."
+                    + (" Choose where each type should go, then click Save and start." if first_run else ""), muted=True)
+        sub.setWordWrap(True)
+        words.addWidget(sub)
+        head.addLayout(words, 1)
         lay.addLayout(head)
 
-        box = QGroupBox("Watching")
-        row = QHBoxLayout(box)
+        box, inner = card("Watching")
+        row = QHBoxLayout()
         self.watch_label = QLabel(pretty(self.cfg["watch"]))
         row.addWidget(self.watch_label, 1)
         row.addWidget(button("Change…", self.pick_watch))
+        inner.addLayout(row)
         lay.addWidget(box)
 
-        box = QGroupBox("Where each type goes")
-        grid, self.cat_labels = QGridLayout(box), {}
+        box, inner = card("Where each type goes")
+        grid, self.cat_labels = QGridLayout(), {}
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(10)
         for i, cat in enumerate(sorter.CATEGORIES):
-            name = QLabel(f"<b>{cat}</b>")
-            name.setToolTip(" ".join(sorted(sorter.CATEGORIES[cat])))
+            exts = sorted(e.lstrip(".") for e in sorter.CATEGORIES[cat])
+            name = QVBoxLayout()
+            name.setSpacing(0)
+            name.addWidget(QLabel(f"<b>{cat}</b>"))
+            hint = label(", ".join(exts[:4]) + (f" +{len(exts) - 4}" if len(exts) > 4 else ""), muted=True)
+            hint.setToolTip(", ".join(exts))
+            name.addWidget(hint)
             self.cat_labels[cat] = QLabel()
-            grid.addWidget(name, i, 0)
+            grid.addLayout(name, i, 0)
             grid.addWidget(self.cat_labels[cat], i, 1)
             grid.addWidget(button("Choose…", lambda _=False, c=cat: self.pick_cat(c)), i, 2)
             grid.addWidget(button(LEAVE, lambda _=False, c=cat: self.set_cat(c, "")), i, 3)
             self.set_cat(cat, self.cfg["categories"].get(cat, ""))
-        self.others_note = QLabel()
-        self.others_note.setWordWrap(True)
-        grid.addWidget(self.others_note, len(sorter.CATEGORIES), 0, 1, 4)
-        self.update_others_note()
         grid.setColumnStretch(1, 1)
+        inner.addLayout(grid)
+        self.others_note = label("", muted=True)
+        self.others_note.setWordWrap(True)
+        inner.addWidget(self.others_note)
+        self.update_others_note()
         lay.addWidget(box)
 
-        box = QGroupBox("Your rules (checked first; “name contains” beats “extension is”)")
-        rules = QVBoxLayout(box)
+        box, inner = card("Your rules")
+        inner.addWidget(label("Checked before the types above. “Name contains” beats “Extension is”.", muted=True))
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["If", "Matches", "Move to"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().hide()
+        self.table.setShowGrid(False)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setMinimumHeight(120)
-        rules.addWidget(self.table)
+        self.table.setMinimumHeight(130)
+        inner.addWidget(self.table)
         add = QHBoxLayout()
-        self.kind = QComboBox()
-        self.kind.addItems(["Extension is", "Name contains"])
+        kinds = QButtonGroup(self)  # GoalWall's segmented choice instead of a drop-down
+        by_ext = button("Extension is", lambda: None, chip=True)
+        self.by_name = button("Name contains", lambda: None, chip=True)
+        for b in (by_ext, self.by_name):
+            b.setCheckable(True)
+            kinds.addButton(b)
+            add.addWidget(b)
+        by_ext.setChecked(True)
         self.value = QLineEdit()
         self.value.setPlaceholderText(".epub   or   invoice")
-        add.addWidget(self.kind)
         add.addWidget(self.value, 1)
         add.addWidget(button("Add rule…", self.add_rule))
-        add.addWidget(button("Remove selected", self.remove_rule))
-        rules.addLayout(add)
+        add.addWidget(button("Remove", self.remove_rule))
+        inner.addLayout(add)
         self.refresh_rules()
         lay.addWidget(box)
 
-        self.at_login = QCheckBox("Open SortDrop when I log in")
+        box, inner = card("Look and startup")
+        chips = QHBoxLayout()
+        chips.setSpacing(6)
+        chips.addWidget(QLabel("Colours"))
+        flow = QGridLayout()  # two rows of five, so the window stays narrow
+        flow.setSpacing(6)
+        palettes = QButtonGroup(self)
+        for i, (key, (title, dots, _light, _dark)) in enumerate(theme.PALETTES.items()):
+            chip = button(title, lambda _=False, k=key: self.pick_palette(k), chip=True)
+            chip.setIcon(swatches(dots))
+            chip.setIconSize(QSize(32, 12))
+            chip.setCheckable(True)
+            chip.setChecked(key == self.saved_palette)
+            palettes.addButton(chip)
+            flow.addWidget(chip, i // 5, i % 5)
+        chips.addLayout(flow)
+        chips.addStretch(1)
+        inner.addLayout(chips)
+        inner.addWidget(label("Light and dark follow your system setting.", muted=True))
+        self.at_login = Switch("Open SortDrop when I log in")
         self.at_login.setChecked(login.enabled() or (first_run and login.supported()))
         self.at_login.setEnabled(login.supported())
         if not login.supported():
             self.at_login.setToolTip("Available in the installed app.")
-        lay.addWidget(self.at_login)
+        inner.addWidget(self.at_login)
+        lay.addWidget(box)
+        lay.addStretch(1)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Save).setText("Save and start" if first_run else "Save")
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        lay.addWidget(buttons)
-        self.resize(780, 720)
+        scroll = QScrollArea()  # small laptop screens: the cards scroll, the buttons stay put
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(body)
+        bar = QHBoxLayout()
+        bar.setContentsMargins(24, 10, 24, 18)
+        bar.addStretch(1)
+        bar.addWidget(button("Cancel", self.reject))
+        save = button("Save and start" if first_run else "Save", self.accept, primary=True)
+        save.setDefault(True)
+        bar.addWidget(save)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(scroll, 1)
+        outer.addLayout(bar)
+        self.resize(820, 780)
+
+    def pick_palette(self, key):
+        self.cfg["palette"] = key
+        theme.apply(QApplication.instance(), key)  # live preview; reject() puts the saved one back
+
+    def reject(self):
+        theme.apply(QApplication.instance(), self.saved_palette)
+        super().reject()
 
     def pick(self, title):
         # The native picker has a "New Folder" button, which covers "create a folder for this type".
@@ -139,7 +261,7 @@ class Settings(QDialog):
 
     def update_others_note(self):
         self.others_note.setText(
-            f"<b>Anything else</b>: SortDrop asks you, with “Move to Others” ({pretty(sorter.others_dir(self.cfg))}) "
+            f"Anything else: SortDrop asks you, with “Move to Others” ({pretty(sorter.others_dir(self.cfg))}) "
             "as the quick choice.")
 
     def pick_cat(self, cat):
@@ -153,7 +275,7 @@ class Settings(QDialog):
 
     def add_rule(self):
         try:
-            rule = sorter.make_rule("ext" if self.kind.currentIndex() == 0 else "name", self.value.text(), "")
+            rule = sorter.make_rule("name" if self.by_name.isChecked() else "ext", self.value.text(), "")
         except ValueError as e:
             QMessageBox.warning(self, "Rule", str(e))
             return
@@ -195,6 +317,11 @@ class App(QObject):
         super().__init__()
         self.qapp = qapp
         self.cfg = sorter.load_config()
+        qapp.setStyle("Fusion")  # same drawing on Mac and Windows, so the GoalWall stylesheet looks identical
+        QFontDatabase.addApplicationFont(str(ASSETS / "fonts" / "Lora-Variable.ttf"))
+        restyle = lambda *_: theme.apply(qapp, self.cfg.get("palette", "route"))  # noqa: E731
+        restyle()
+        qapp.styleHints().colorSchemeChanged.connect(restyle)  # system light/dark switch, live
         self.watch = Path(self.cfg["watch"]).expanduser().resolve()
         self.paused, self.asking = False, False
         self.busy, self.restored, self.pending = set(), set(), []
@@ -298,6 +425,7 @@ class App(QObject):
         box.setIconPixmap(QPixmap(str(ASSETS / "icon.png")).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         box.setWindowFlag(Qt.WindowStaysOnTopHint)
         others = box.addButton("Move to Others", QMessageBox.AcceptRole)
+        others.setProperty("primary", True)
         choose = box.addButton("Choose folder…", QMessageBox.YesRole)  # YesRole always closes the box
         box.addButton(LEAVE, QMessageBox.RejectRole)
         box.setDefaultButton(others)
