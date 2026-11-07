@@ -92,10 +92,15 @@ class Switch(QCheckBox):
         p.setRenderHint(QPainter.Antialiasing)
         if not self.isEnabled():
             p.setOpacity(.45)
-        track = QRectF(0, (self.height() - 22) / 2, 38, 22)
+        track = QRectF(3, (self.height() - 22) / 2, 38, 22)  # 3px room for the focus ring
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(theme.current.get("accent", "#2D5BD0")) if self.isChecked() else QColor(118, 118, 128, 61))
         p.drawRoundedRect(track, 11, 11)
+        if self.hasFocus():  # keyboard users need to see where they are
+            p.setPen(QColor(theme.current.get("accent", "#2D5BD0")))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(track.adjusted(-2.5, -2.5, 2.5, 2.5), 13, 13)
+            p.setPen(Qt.NoPen)
         p.setBrush(QColor("white"))
         p.drawEllipse(QRectF(track.x() + (18 if self.isChecked() else 2), track.y() + 2, 18, 18))
         p.setPen(QColor(theme.current.get("ink", "#16232B")))
@@ -494,6 +499,7 @@ class App(QObject):
             self.cfg = dlg.cfg
             self.cfg["setup_done"] = True
             sorter.save_config(self.cfg)
+            theme.apply(self.qapp, self.cfg.get("palette", "route"))  # in case light/dark changed mid-preview
             if login.supported() and dlg.at_login.isChecked() != login.enabled():
                 login.set_enabled(dlg.at_login.isChecked())
             if watch_changed or not self.observer:
