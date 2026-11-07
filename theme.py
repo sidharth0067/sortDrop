@@ -65,7 +65,7 @@ def stylesheet(t):
     QPushButton:pressed {{ background: {rgba(ink, .15)}; }}
     QPushButton[primary="true"] {{ background: {accent}; color: {t['on_accent']}; padding: 7px 20px; border-radius: 15px; }}
     QPushButton[primary="true"]:hover {{ background: {QColor(accent).lighter(108).name()}; }}
-    QPushButton[chip="true"] {{ border-radius: 13px; padding: 5px 11px; font-weight: 500; font-size: 12px; }}
+    QPushButton[chip="true"] {{ border-radius: 10px; padding: 5px 11px; font-weight: 500; font-size: 12px; }}
     QPushButton[chip="true"]:checked {{ background: {accent}; color: {t['on_accent']}; }}
     QLineEdit {{ background: {t['surface']}; border: 1px solid {rgba(ink, .18)}; border-radius: 9px; padding: 5px 9px;
                  selection-background-color: {accent}; selection-color: {t['on_accent']}; }}
@@ -78,9 +78,10 @@ def stylesheet(t):
     """
 
 
-def apply(qapp, name):
-    """Recolour the whole app; follows the system's light/dark setting like GoalWall."""
-    dark = qapp.styleHints().colorScheme() == Qt.ColorScheme.Dark
+def apply(qapp, name, dark=None):
+    """Recolour the whole app; follows the system's light/dark setting like GoalWall (tests can force `dark`)."""
+    if dark is None:
+        dark = qapp.styleHints().colorScheme() == Qt.ColorScheme.Dark
     t = tokens(name, dark)
     current.clear()
     current.update(t)

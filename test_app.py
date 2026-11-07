@@ -9,7 +9,7 @@ HOME = Path(tempfile.mkdtemp()).resolve()
 os.environ["HOME"] = os.environ["USERPROFILE"] = str(HOME)  # keep the test away from the real Downloads
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt, QTimer  # noqa: E402
+from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 import app  # noqa: E402
@@ -24,13 +24,6 @@ def shot(widget, name):
     if SHOTS:
         Path(SHOTS).mkdir(exist_ok=True)
         widget.grab().save(str(Path(SHOTS) / f"{name}.png"))
-
-
-def set_dark(qapp, dark):
-    # setColorScheme exists from Qt 6.8; older Qt just stays in the system mode
-    if hasattr(qapp.styleHints(), "setColorScheme"):
-        qapp.styleHints().setColorScheme(Qt.ColorScheme.Dark if dark else Qt.ColorScheme.Light)
-        qapp.processEvents()
 
 
 def wait_for(check, what, qapp, timeout=20):
@@ -75,15 +68,13 @@ def main():
     shown = dict(cfg, rules=[sorter.make_rule("name", "invoice", str(HOME / "Documents" / "Finance")),
                              sorter.make_rule("ext", "epub", sorter.others_dir(cfg))])
     for pal, dark in (("route", False), ("route", True), ("matcha", False), ("dracula", True)):
-        set_dark(qapp, dark)
         s = app.Settings(dict(shown, palette=pal), True)
-        theme.apply(qapp, pal)
+        theme.apply(qapp, pal, dark)  # off-screen Qt ignores the system dark mode, so force it
         s.resize(820, 1320)  # tall enough that the picture shows every card
         s.show()
         qapp.processEvents()
         shot(s, f"settings-{pal}-{'dark' if dark else 'light'}")
         s.close()
-    set_dark(qapp, False)
     theme.apply(qapp, "route")
     s = app.Settings(cfg, False)
     s.pick_palette("dracula")

@@ -171,6 +171,7 @@ class Settings(QDialog):
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["If", "Matches", "Move to"])
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.table.verticalHeader().hide()
         self.table.setShowGrid(False)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -424,8 +425,8 @@ class App(QObject):
                           + (f"Where should <b>{ext}</b> files go?" if ext else "Where should this file go?"))
         box.setIconPixmap(QPixmap(str(ASSETS / "icon.png")).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         box.setWindowFlag(Qt.WindowStaysOnTopHint)
-        others = box.addButton("Move to Others", QMessageBox.AcceptRole)
-        others.setProperty("primary", True)
+        others = button("Move to Others", lambda: None, primary=True)  # styled before it's added, so it shows
+        box.addButton(others, QMessageBox.AcceptRole)
         choose = box.addButton("Choose folder…", QMessageBox.YesRole)  # YesRole always closes the box
         box.addButton(LEAVE, QMessageBox.RejectRole)
         box.setDefaultButton(others)
